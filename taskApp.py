@@ -1,188 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-
-class TaskForm(ttk.Frame):
-    def __init__(self, master, callbacks):
-        super().__init__(master, style="Card.TFrame", padding=18)
-        self.callbacks = callbacks
-        self.build_form()
-
-    def build_form(self):
-        ttk.Label(self, text="Task Form", style="SectionTitle.TLabel").pack(anchor="w", pady=(0, 10))
-
-        ttk.Label(self, text="Task ID", style="FieldLabel.TLabel").pack(anchor="w")
-        self.id_entry = ttk.Entry(self, width=34)
-        self.id_entry.pack(fill="x", pady=(4, 12))
-
-        ttk.Label(self, text="Title", style="FieldLabel.TLabel").pack(anchor="w")
-        self.title_entry = ttk.Entry(self, width=34)
-        self.title_entry.pack(fill="x", pady=(4, 12))
-
-        ttk.Label(self, text="Description", style="FieldLabel.TLabel").pack(anchor="w")
-        self.description_text = tk.Text(
-            self,
-            height=7,
-            width=34,
-            font=("Segoe UI", 10),
-            wrap="word",
-            relief="solid",
-            bd=1
-        )
-        self.description_text.pack(fill="x", pady=(4, 12))
-
-        ttk.Label(self, text="Priority", style="FieldLabel.TLabel").pack(anchor="w")
-        self.priority_combo = ttk.Combobox(
-            self,
-            state="readonly",
-            values=("High", "Medium", "Low"),
-            width=31
-        )
-        self.priority_combo.pack(fill="x", pady=(4, 16))
-        self.priority_combo.set("Medium")
-
-        ttk.Button(self, text="Add Task", command=self.callbacks["add"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Update Task", command=self.callbacks["update"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Clear Form", command=self.callbacks["clear"]).pack(fill="x", pady=4)
-
-        ttk.Separator(self, orient="horizontal").pack(fill="x", pady=14)
-
-        ttk.Label(self, text="Task Actions", style="SectionTitle.TLabel").pack(anchor="w", pady=(0, 10))
-
-        ttk.Button(self, text="Search by ID", command=self.callbacks["search"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Mark Completed", command=self.callbacks["complete"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Mark Pending", command=self.callbacks["pending"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Move to Front", command=self.callbacks["front"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Move to Back", command=self.callbacks["back"]).pack(fill="x", pady=4)
-        ttk.Button(self, text="Delete Task", command=self.callbacks["delete"]).pack(fill="x", pady=4)
-
-    def get_form_data(self):
-        task_id = self.id_entry.get().strip()
-        title = self.title_entry.get().strip()
-        description = self.description_text.get("1.0", "end").strip()
-        priority = self.priority_combo.get().strip()
-
-        return task_id, title, description, priority
-
-    def set_form_data(self, task):
-        self.id_entry.delete(0, "end")
-        self.id_entry.insert(0, task.task_id)
-
-        self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, task.title)
-
-        self.description_text.delete("1.0", "end")
-        self.description_text.insert("1.0", task.description)
-
-        self.priority_combo.set(task.priority)
-
-    def clear_form(self):
-        self.id_entry.delete(0, "end")
-        self.title_entry.delete(0, "end")
-        self.description_text.delete("1.0", "end")
-        self.priority_combo.set("Medium")
-
-    def get_task_id(self):
-        return self.id_entry.get().strip()
-
-
-class TaskTable(ttk.Frame):
-    def __init__(self, master, on_select):
-        super().__init__(master, style="Card.TFrame", padding=18)
-        self.on_select = on_select
-        self.build_table()
-
-    def build_table(self):
-        ttk.Label(self, text="Task List", style="SectionTitle.TLabel").pack(anchor="w")
-
-        self.summary_label = ttk.Label(
-            self,
-            text="Total: 0 | Pending: 0 | Completed: 0",
-            style="Summary.TLabel"
-        )
-        self.summary_label.pack(anchor="w", pady=(6, 12))
-
-        columns = ("id", "title", "priority", "status", "description")
-
-        table_container = tk.Frame(self, bg="#ffffff")
-        table_container.pack(fill="both", expand=True)
-
-        self.tree = ttk.Treeview(
-            table_container,
-            columns=columns,
-            show="headings",
-            selectmode="browse"
-        )
-
-        self.tree.heading("id", text="ID")
-        self.tree.heading("title", text="Title")
-        self.tree.heading("priority", text="Priority")
-        self.tree.heading("status", text="Status")
-        self.tree.heading("description", text="Description")
-
-        self.tree.column("id", width=90, anchor="center")
-        self.tree.column("title", width=220, anchor="w")
-        self.tree.column("priority", width=100, anchor="center")
-        self.tree.column("status", width=120, anchor="center")
-        self.tree.column("description", width=380, anchor="w")
-
-        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        self.tree.bind("<<TreeviewSelect>>", self.handle_select)
-
-    def handle_select(self, event):
-        self.on_select()
-
-    def refresh(self, service):
-        items = self.tree.get_children()
-
-        for item in items:
-            self.tree.delete(item)
-
-        def insert_task(task):
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    task.task_id,
-                    task.title,
-                    task.priority,
-                    task.status,
-                    task.description
-                )
-            )
-
-        service.traverse_tasks(insert_task)
-
-        total, pending, completed = service.get_statistics()
-        self.summary_label.config(
-            text="Total: " + str(total) +
-                 " | Pending: " + str(pending) +
-                 " | Completed: " + str(completed)
-        )
-
-    def get_selected_task_id(self):
-        selection = self.tree.selection()
-
-        if not selection:
-            return ""
-
-        item_data = self.tree.item(selection[0], "values")
-
-        if not item_data:
-            return ""
-
-        return item_data[0]
-
-    def clear_selection(self):
-        selected_items = self.tree.selection()
-
-        for item in selected_items:
-            self.tree.selection_remove(item)
+from taskUi import TaskForm, TaskTable
 
 
 class TaskApp(tk.Tk):
@@ -272,7 +91,7 @@ class TaskApp(tk.Tk):
 
         ttk.Label(
             header,
-            text="Full task management using nodes and next references.",
+            text="All task operations work with nodes and next references.",
             style="Subtitle.TLabel"
         ).pack(anchor="w", pady=(4, 0))
 
@@ -302,7 +121,7 @@ class TaskApp(tk.Tk):
         self.table.clear_selection()
 
     def refresh_table(self):
-        self.table.refresh(self.service)
+        self.table.refresh_table(self.service)
 
     def load_selected_task(self):
         task_id = self.table.get_selected_task_id()
@@ -329,6 +148,7 @@ class TaskApp(tk.Tk):
         messagebox.showinfo("Success", message + "\nGenerated ID: " + task.task_id)
         self.clear_form()
         self.refresh_table()
+        self.table.select_task_by_id(task.task_id)
 
     def update_task(self):
         task_id, title, description, priority = self.form.get_form_data()
@@ -341,8 +161,8 @@ class TaskApp(tk.Tk):
 
         if success:
             messagebox.showinfo("Success", message)
-            self.clear_form()
             self.refresh_table()
+            self.table.select_task_by_id(task_id)
         else:
             messagebox.showwarning("Warning", message)
 
@@ -360,6 +180,7 @@ class TaskApp(tk.Tk):
             return
 
         self.form.set_form_data(task)
+        self.table.select_task_by_id(task_id)
 
         messagebox.showinfo(
             "Task Found",
@@ -380,6 +201,7 @@ class TaskApp(tk.Tk):
         if success:
             messagebox.showinfo("Success", message)
             self.refresh_table()
+            self.table.select_task_by_id(task_id)
         else:
             messagebox.showwarning("Warning", message)
 
@@ -395,6 +217,7 @@ class TaskApp(tk.Tk):
         if success:
             messagebox.showinfo("Success", message)
             self.refresh_table()
+            self.table.select_task_by_id(task_id)
         else:
             messagebox.showwarning("Warning", message)
 
@@ -410,6 +233,7 @@ class TaskApp(tk.Tk):
         if success:
             messagebox.showinfo("Result", message)
             self.refresh_table()
+            self.table.select_task_by_id(task_id)
         else:
             messagebox.showwarning("Warning", message)
 
@@ -425,6 +249,7 @@ class TaskApp(tk.Tk):
         if success:
             messagebox.showinfo("Result", message)
             self.refresh_table()
+            self.table.select_task_by_id(task_id)
         else:
             messagebox.showwarning("Warning", message)
 
